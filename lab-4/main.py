@@ -1,12 +1,5 @@
 import pandas as pd
 
-# # 1. PREPROCESSING
-# - Rimozione stopwords
-# - Lemmatization/Stemming
-# - Rimozione punteggiatura e caratteri speciali
-# - Lowercase
-# - Rimozione documenti troppo corti
-
 # # 2. EMBEDDING
 # - TF-IDF (baseline)
 # - Word2Vec / Doc2Vec
@@ -38,12 +31,14 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer, PorterStemmer
+from bertopic import BERTopic
+from sentence_transformers import SentenceTransformer
 
 # nltk.download('punkt')
 # nltk.download('stopwords')
 # nltk.download('wordnet')
 # nltk.download('omw-1.4')
-    
+
 def preprocess_text(text):
     
     stop_words = set(stopwords.words("italian"))       
@@ -55,9 +50,9 @@ def preprocess_text(text):
     # URL
     text = re.sub(r'https?://\S+|www\.\S+', '', text)
     # HTML
-    text = re.sub(r'<.*?>', text)
+    text = re.sub(r'<.*?>', '', text)
     # Email
-    text = re.sub(r'\S+@\S+', text)
+    text = re.sub(r'\S+@\S+', '',  text)
     # Mantiene solo lettere, numeri e spazi
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text)
     
@@ -70,15 +65,6 @@ def preprocess_text(text):
     # tokens = [stemmer.stem(word) for word in tokens]
     
     return ' '.join(tokens)
-
-def preprocess_corpus(texts):
-    processed_texts = []
-    
-    for _, text in enumerate(texts):
-        processed = preprocess_text(text)
-        processed_texts.append(processed)
-    
-    return processed_texts
     
 # def get_vocabulary_stats(self, texts):
 #     """
@@ -116,8 +102,24 @@ def main():
     
     df = pd.read_csv('ML-Arxiv-Papers.csv')
     print(f"Colonne disponibili: {list(df.columns)}")
-    print(df.iloc[:, :2])
-    return
+    
+    preprocessed_abstracts = []
+    for abstract in df.iloc[:, 3]:
+        processed = preprocess_text(abstract)
+        preprocessed_abstracts.append(processed)
+
+    # 1. Embedding model (puoi cambiare modello e parametri)
+    embedding_model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
+
+    # 2. Creazione modello BERTopic
+    topic_model = BERTopic(embedding_model=embedding_model, min_topic_size=30)
+
+    # 3. Fits topics su array di testo preprocessato
+    topics, probs = topic_model.fit_transform(preprocessed_abstracts)
+
+    # 4. Informazioni sui topic trovati
+    print(topic_model.get_topic_info())
+    print("\ntopics :",topics)
     
 if __name__ == "__main__":
     main()
