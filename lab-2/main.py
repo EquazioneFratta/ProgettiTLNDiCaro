@@ -151,8 +151,6 @@ def main():
     
     print("SimSem generici: ", simsem_generic)
     print("SimSem specifici: ", simsem_specific, "\n")
-    
-    
-    
+        
 if __name__ == "__main__":
     main()
