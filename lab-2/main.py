@@ -77,14 +77,15 @@ def main():
         print(f"   ➜ Vector similarity: {vector_similarity:.2f} \n")
     
     
-    # Fase 4 - similiarità lessicale (simlex)
+    # Fase 4.1 - similiarità lessicale (simlex)
     # "dopo aver applicato tecniche di stopword removal, LEMMATIZZAZIONE, e norma-lizzazione."
     # uso quindi preprocess_semantic_overlap
     print("Similarità lessicale (SimLex):")
+
+    simlex_by_term = {}
     for term, definitions in term_dict.items():
-        
         simlex_scores = []
-    
+        
         for d1, d2 in itertools.combinations(definitions, 2):
             set1 = preprocess_semantic_overlap(d1)
             set2 = preprocess_semantic_overlap(d2)
@@ -96,10 +97,10 @@ def main():
             simlex_scores.append(simlex)
         
         avg_simlex = sum(simlex_scores) / len(simlex_scores)
-        # simlex_by_term[term] = avg_simlex
+        simlex_by_term[term] = avg_simlex
         print(f"{term} = {avg_simlex:.3f}")
 
-    # Fase 4 - Similarità semantica (SimSem)
+    # Fase 4.2 - Similarità semantica (SimSem)
     print("\nSimilarità semantica (SimSem):")
 
     simsem_by_term = {}
@@ -115,6 +116,43 @@ def main():
         avg_simsem = sum(simsem_scores) / len(simsem_scores)
         simsem_by_term[term] = avg_simsem
         print(f"{term} = {avg_simsem:.3f}")
+    
+    # Fase 4.3 - Aggregazione dei valori di simlex e simsem (Concretezza, Specificità)
+    
+    # pantalone: concreto generico 
+    # microscopio: concreto specifico
+    # pericolo: astratto generico
+    # euristica: astratto specifico
+    
+    print("\nsimlex: ", simlex_by_term)
+    print("simsem: ", simsem_by_term)
+    
+    simlex_concrete = (simlex_by_term['Pantalone'] + simlex_by_term['Microscopio']) / 2
+    simlex_abstract = (simlex_by_term['Pericolo'] + simlex_by_term['Euristica']) / 2
+    
+    simsem_concrete = (simsem_by_term['Pantalone'] + simsem_by_term['Microscopio']) / 2
+    simsem_abstract = (simsem_by_term['Pericolo'] + simsem_by_term['Euristica']) / 2
+    
+    simlex_generic = (simlex_by_term['Pantalone'] + simlex_by_term['Pericolo']) / 2
+    simlex_specific = (simlex_by_term['Microscopio'] + simlex_by_term['Euristica']) / 2
+    
+    simsem_generic = (simsem_by_term['Pantalone'] + simsem_by_term['Pericolo']) / 2
+    simsem_specific = (simsem_by_term['Microscopio'] + simsem_by_term['Euristica']) / 2
+    
+    
+    print("SimLex concreti: ", simlex_concrete)
+    print("SimLex astratti: ", simlex_abstract, "\n")
+    
+    print("SimSem concreti: ", simsem_concrete)
+    print("SimSem astratti: ", simsem_abstract, "\n")
+    
+    print("SimLex generici: ", simlex_generic)
+    print("SimLex specifici: ", simlex_specific, "\n")
+    
+    print("SimSem generici: ", simsem_generic)
+    print("SimSem specifici: ", simsem_specific, "\n")
+    
+    
     
 if __name__ == "__main__":
     main()
