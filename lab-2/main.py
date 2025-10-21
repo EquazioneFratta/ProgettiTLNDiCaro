@@ -9,7 +9,7 @@ from nltk.corpus import stopwords
 
 nlp = spacy.load('it_core_news_md')  
 
-def preprocess_lexical_overlap(text):
+def preprocess_without_lemma_overlap(text):
     text = text.lower()
     text = re.sub(r'[^\w\s]', '', text)
     words = text.split()
@@ -20,7 +20,7 @@ def preprocess_lexical_overlap(text):
 # (es. "mangiato", "mangiando", "mangia" → "mangiare"), 
 # catturando meglio la similarità semantica
 # non la userei per calcolare la sovrapposizione lessicale
-def preprocess_semantic_overlap(text):
+def preprocess_with_lemma_overlap(text):
     doc = nlp(text.lower())
     # Lemmatizza e mantieni solo parole significative
     return {
@@ -44,18 +44,18 @@ def main():
     #         print(f"   {i}. {definizione}")
     #     print()  
 
-    # Fase 3 - sovrapposizione lessicale
+    # Fase 3 - sovrapposizione lessicale tra coppia presa a caso
     print("Sovrapposizione lessicale:")
     for term, definitions in term_dict.items():
         print(f"Termine: {term}")
     
         d1, d2 = random.sample(definitions, 2)
-        set1 = preprocess_lexical_overlap(d1)
-        set2 = preprocess_lexical_overlap(d2)
-        overlap = len(set1 & set2) / len(set1 | set2) 
+        set1 = preprocess_without_lemma_overlap(d1)
+        set2 = preprocess_without_lemma_overlap(d2)
+        overlap = len(set1 & set2) / len(set1 | set2) #jaccard similarity
         print(f" - Overlap tra:\n   1) {d1}\n   2) {d2}\n  = {overlap:.2f} \n")
     
-    # Fase 3 - sovrapposizione semantica
+    # Fase 3 - sovrapposizione semantica tra coppia presa a caso
     print("Sovrapposizione semantica:")
     for term, definitions in term_dict.items():
         print(f"Termine: {term}")
@@ -63,9 +63,9 @@ def main():
         # da capire quale dei 2 usare
         # Metodo 1: Sovrapposizione sui lemmi (baseline semantico)
         d1, d2 = random.sample(definitions, 2)
-        set1 = preprocess_semantic_overlap(d1)
-        set2 = preprocess_semantic_overlap(d2)
-        overlap = len(set1 & set2) / len(set1 | set2)
+        #set1 = preprocess_with_lemma_overlap(d1)
+        #set2 = preprocess_with_lemma_overlap(d2)
+        #overlap = len(set1 & set2) / len(set1 | set2) #jaccard similarity
                 
         # Metodo 2: Similarità vettoriale con spaCy (più robusto)
         doc1 = nlp(d1)
@@ -73,13 +73,13 @@ def main():
         vector_similarity = doc1.similarity(doc2)
                 
         print(f" - Overlap tra:\n   1) {d1}\n   2) {d2}")
-        print(f"   ➜ Lemma overlap: {overlap:.2f}")
+        #print(f"   ➜ Lemma overlap: {overlap:.2f}")
         print(f"   ➜ Vector similarity: {vector_similarity:.2f} \n")
     
     
     # Fase 4.1 - similiarità lessicale (simlex)
     # "dopo aver applicato tecniche di stopword removal, LEMMATIZZAZIONE, e norma-lizzazione."
-    # uso quindi preprocess_semantic_overlap
+    # uso quindi preprocess_with_lemma_overlap
     print("Similarità lessicale (SimLex):")
 
     simlex_by_term = {}
@@ -87,8 +87,8 @@ def main():
         simlex_scores = []
         
         for d1, d2 in itertools.combinations(definitions, 2):
-            set1 = preprocess_semantic_overlap(d1)
-            set2 = preprocess_semantic_overlap(d2)
+            set1 = preprocess_with_lemma_overlap(d1)
+            set2 = preprocess_with_lemma_overlap(d2)
             
             common_terms = len(set1 & set2)
             total_terms = len(set1 | set2)
@@ -110,7 +110,7 @@ def main():
         for d1, d2 in itertools.combinations(definitions, 2):
             doc1 = nlp(d1)
             doc2 = nlp(d2)   
-            simsem = doc1.similarity(doc2)
+            simsem = doc1.similarity(doc2) #fa media di word embedding e cosine similarity
             simsem_scores.append(simsem)
         
         avg_simsem = sum(simsem_scores) / len(simsem_scores)
@@ -151,6 +151,38 @@ def main():
     
     print("SimSem generici: ", simsem_generic)
     print("SimSem specifici: ", simsem_specific, "\n")
+
+    # Fase 4.4 - Aggregazione per gruppi (considerando tutte le coppie)
+    print("\n=== Aggregazione per gruppi ===")
+    
+    # Raggruppa le definizioni
+    concrete_defs = list(term_dict['Pantalone']) + list(term_dict['Microscopio'])
+    abstract_defs = list(term_dict['Pericolo']) + list(term_dict['Euristica'])
+    generic_defs = list(term_dict['Pantalone']) + list(term_dict['Pericolo'])
+    specific_defs = list(term_dict['Microscopio']) + list(term_dict['Euristica'])
+    
+    def calc_avg_simlex(definitions):
+        scores = []
+        for d1, d2 in itertools.combinations(definitions, 2):
+            set1 = preprocess_with_lemma_overlap(d1)
+            set2 = preprocess_with_lemma_overlap(d2)
+            scores.append(len(set1 & set2) / len(set1 | set2))
+        return sum(scores) / len(scores) if scores else 0
+    
+    def calc_avg_simsem(definitions):
+        scores = []
+        for d1, d2 in itertools.combinations(definitions, 2):
+            scores.append(nlp(d1).similarity(nlp(d2)))
+        return sum(scores) / len(scores) if scores else 0
+    
+    print(f"SimLex concreti (tutte le coppie): {calc_avg_simlex(concrete_defs):.3f}")
+    print(f"SimLex astratti (tutte le coppie): {calc_avg_simlex(abstract_defs):.3f}")
+    print(f"SimSem concreti (tutte le coppie): {calc_avg_simsem(concrete_defs):.3f}")
+    print(f"SimSem astratti (tutte le coppie): {calc_avg_simsem(abstract_defs):.3f}")
+    print(f"SimLex generici (tutte le coppie): {calc_avg_simlex(generic_defs):.3f}")
+    print(f"SimLex specifici (tutte le coppie): {calc_avg_simlex(specific_defs):.3f}")
+    print(f"SimSem generici (tutte le coppie): {calc_avg_simsem(generic_defs):.3f}")
+    print(f"SimSem specifici (tutte le coppie): {calc_avg_simsem(specific_defs):.3f}")
         
 if __name__ == "__main__":
     main()
