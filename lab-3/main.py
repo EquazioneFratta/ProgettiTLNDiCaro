@@ -8,6 +8,13 @@ nlp = spacy.load('it_core_news_md')
 # nltk.download('wordnet')
 # nltk.download('omw-1.4')
 
+def preprocess_text(text):
+    doc = nlp(text.lower())
+    return [token.lemma_ for token in doc 
+            if not token.is_stop 
+            and not token.is_punct 
+            and token.is_alpha]
+    
 def italian_synonyms(term):
     synsets = wn.synsets(term, lang='ita')
     synonyms = set()
@@ -17,10 +24,8 @@ def italian_synonyms(term):
     return list(synonyms)
 
 def find_synsets_from_definition(definition, target_term=None, score_threshold=0.05):
-    doc = nlp(definition.lower())
-    keywords = {token.lemma_ for token in doc
-                if not token.is_stop and token.is_alpha and len(token.lemma_) > 2}
-
+    keywords = set(preprocess_text(definition))
+    
     search_terms = set(keywords)
     if target_term:
         search_terms.add(target_term)
