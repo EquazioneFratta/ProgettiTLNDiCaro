@@ -16,10 +16,6 @@ def preprocess_without_lemma_overlap(text):
     stop_words = set(stopwords.words('italian'))
     return {w for w in words if w not in stop_words}
     
-# Lemmatizzazione: Riduce le parole alla loro forma base 
-# (es. "mangiato", "mangiando", "mangia" → "mangiare"), 
-# catturando meglio la similarità semantica
-# non la userei per calcolare la sovrapposizione lessicale
 def preprocess_with_lemma_overlap(text):
     doc = nlp(text.lower())
     # Lemmatizza e mantieni solo parole significative
@@ -37,12 +33,6 @@ def main():
         row[1]: [x for x in row[2:] if pd.notna(x)]  
         for row in df.values
     }   
-    
-    # for termine, definizioni in term_dict.items():
-    #     print(f"{termine}:")
-    #     for i, definizione in enumerate(definizioni, start=1):
-    #         print(f"   {i}. {definizione}")
-    #     print()  
 
     # Fase 3 - sovrapposizione lessicale tra coppia presa a caso
     print("Sovrapposizione lessicale:")
@@ -60,21 +50,15 @@ def main():
     for term, definitions in term_dict.items():
         print(f"Termine: {term}")
         
-        # da capire quale dei 2 usare
-        # Metodo 1: Sovrapposizione sui lemmi (baseline semantico)
         d1, d2 = random.sample(definitions, 2)
-        #set1 = preprocess_with_lemma_overlap(d1)
-        #set2 = preprocess_with_lemma_overlap(d2)
-        #overlap = len(set1 & set2) / len(set1 | set2) #jaccard similarity
-                
-        # Metodo 2: Similarità vettoriale con spaCy (più robusto)
+        
+        # similarità vettoriale spacy 
         doc1 = nlp(d1)
         doc2 = nlp(d2)
         vector_similarity = doc1.similarity(doc2)
                 
         print(f" - Overlap tra:\n   1) {d1}\n   2) {d2}")
-        #print(f"   ➜ Lemma overlap: {overlap:.2f}")
-        print(f"   ➜ Vector similarity: {vector_similarity:.2f} \n")
+        print(f"   -> Vector similarity: {vector_similarity:.2f} \n")
     
     
     # Fase 4.1 - similiarità lessicale (simlex)
