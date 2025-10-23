@@ -1,113 +1,116 @@
 import nltk
 import pandas as pd
 import spacy
-
 from nltk.corpus import wordnet as wn
 
-nlp = spacy.load('it_core_news_md')  
+nlp = spacy.load('it_core_news_md')
 
 # nltk.download('wordnet')
-# nltk.download('omw-1.4')  
+# nltk.download('omw-1.4')
 
-def find_synset_from_definition(definition):  # , target_term=None
-    # Cerca il synset in WordNet che meglio corrisponde alla definizione.
-    
-    # Args:
-    #     definition: la definizione testuale
-    #     target_term: il termine target (opzionale, per verificare correttezza)
-    
-    # Returns:
-    #     dict con synset trovato, punteggio e info
+def italian_synonyms(term):
+    synsets = wn.synsets(term, lang='ita')
+    synonyms = set()
+    for syn in synsets:
+        for lemma in syn.lemma_names('ita'):
+            synonyms.add(lemma)
+    return list(synonyms)
+
+def find_synsets_from_definition(definition, target_term=None, score_threshold=0.05):
     doc = nlp(definition.lower())
-    
-    keywords = {token.lemma_ for token in doc 
+    keywords = {token.lemma_ for token in doc
                 if not token.is_stop and token.is_alpha and len(token.lemma_) > 2}
-    
-    # Se conosci il termine target, cerca tra i suoi synset
-    # if target_term:
-    #     synsets = wn.synsets(target_term, lang='eng')
-    # else:
-        # Altrimenti cerca tra tutti i synset delle parole chiave
-    synsets = []
-    for keyword in keywords:
-        synsets.extend(wn.synsets(keyword, lang='ita'))
-    
-    best_match = None
-    best_score = 0
-    for synset in synsets:
-            # Definizione di WordNet (usa inglese come fallback)
-            wn_definition = synset.definition()
-            
-            # Lemmi italiani del synset
-            lemmas_ita = synset.lemma_names('ita')
-            
-            # Calcola overlap
-            wn_doc = nlp(wn_definition.lower())
-            wn_keywords = {token.lemma_ for token in wn_doc 
-                        if not token.is_stop and token.is_alpha}
-            
-            # Aggiungi anche i lemmi italiani alle keywords
-            wn_keywords.update(lemmas_ita)
-            
-            intersection = len(keywords & wn_keywords)
-            union = len(keywords | wn_keywords)
-            score = intersection / union if union > 0 else 0
-            
-            if score > best_score:
-                best_score = score
-                best_match = synset
-        
-    return {
-        'synset': best_match,
-        'synset_name': best_match.name() if best_match else None,
-        'lemmas_ita': best_match.lemma_names('ita') if best_match else [],
-        'lemmas_eng': best_match.lemma_names('eng') if best_match else [],
-        'wn_definition': best_match.definition() if best_match else None,
-        'score': best_score,
-        'hypernyms': [h.lemma_names('ita') for h in best_match.hypernyms()] if best_match else [],
-        'pos': best_match.pos() if best_match else None
-    }
-    
+
+    search_terms = set(keywords)
+    if target_term:
+        search_terms.add(target_term)
+        search_terms.update(italian_synonyms(target_term))
+
+    candidate_synsets = []
+    for term in search_terms:
+        candidate_synsets.extend(wn.synsets(term, lang='ita'))
+
+    scored_synsets = []
+    for synset in candidate_synsets:
+        lemmas_ita = synset.lemma_names('ita')
+        wn_doc = nlp(" ".join(lemmas_ita).lower())
+        wn_keywords = {token.lemma_ for token in wn_doc if not token.is_stop and token.is_alpha}
+        wn_keywords.update(lemmas_ita)
+
+        intersection = len(keywords & wn_keywords)
+        union = len(keywords | wn_keywords)
+        score = intersection / union if union > 0 else 0
+
+        # Leggero boost se intersezione con iperonimi
+        hypernyms = synset.hypernyms()
+        hypernyms_lemmas = set()
+        for h in hypernyms:
+            hypernyms_lemmas.update(h.lemma_names('ita'))
+
+        if len(keywords & hypernyms_lemmas) > 0:
+            score += 0.1
+
+        if score >= score_threshold:
+            scored_synsets.append((score, synset))
+
+    scored_synsets.sort(key=lambda x: x[0], reverse=True)
+    top_synsets = scored_synsets[:3]
+
+    results = []
+    for score, synset in top_synsets:
+        results.append({
+            'synset': synset,
+            'synset_name': synset.name(),
+            'lemmas_ita': synset.lemma_names('ita'),
+            'lemmas_eng': synset.lemma_names('eng'),
+            'wn_definition': synset.definition(),
+            'score': score,
+            'hypernyms': [h.lemma_names('ita') for h in synset.hypernyms()],
+            'pos': synset.pos()
+        })
+
+    return results
+
 def main():
     df = pd.read_excel('dataset_definizioni_TLN_25.xlsx')
-    # rimuove le ultime due colonne
     df = df.iloc[:, :-2]
-    
+
     term_dict = {
-        row[1]: [x for x in row[2:] if pd.notna(x)]  
+        row[1]: [x for x in row[2:] if pd.notna(x)]
         for row in df.values
-    }   
-    
+    }
+
     results = {}
-    
     for term, definitions in term_dict.items():
         print(f"\n{'='*70}")
         print(f"TERMINE: {term.upper()}")
         print(f"{'='*70}")
-        
+
         term_results = []
-        
+
         for i, definition in enumerate(definitions, 1):
+            if i > 5:
+                break  # Limita a prime 5 definizioni per termine
             print(f"\n Definizione {i}:")
             print(f"   {definition}")
-            
-            result = find_synset_from_definition(definition) #  , target_term=term
-            
-            if result['synset']:
-                print(f"\n Synset trovato: {result['synset_name']}")
-                print(f"   POS: {result['pos']}")
-                print(f"   Definizione WN: {result['wn_definition']}")
-                print(f"   Score: {result['score']:.3f}")
-                # if result['hypernyms']:
-                #     print(f"   Iperonimi: {', '.join(result['hypernyms'][:3])}")
+
+            synset_candidates = find_synsets_from_definition(definition, target_term=term)
+
+            if synset_candidates:
+                print(f"\n Synset candidati trovati:")
+                for idx, res in enumerate(synset_candidates, 1):
+                    print(f"  {idx}. Synset: {res['synset_name']}")
+                    print(f"     Definizione WN (inglese): {res['wn_definition']}")
+                    print(f"     Lemmi italiani: {', '.join(res['lemmas_ita'])}")
+                    # print(f"     Score: {res['score']:.3f}")
+                    # if res['hypernyms']:
+                    #     print(f"     Iperonimi (lemmi italiani): {', '.join(sum(res['hypernyms'], []))}")
             else:
                 print(f"\n Nessun synset trovato")
-            
-            term_results.append(result)
-        
+
+            term_results.append(synset_candidates)
+
         results[term] = term_results
-    
+
 if __name__ == "__main__":
     main()
-        
-
